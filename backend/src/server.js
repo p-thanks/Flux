@@ -33,16 +33,19 @@ Sentry.setupExpressErrorHandler(app);
 const startServer = async () => {
   try {
     await connectDB();
-    if (ENV.NODE_ENV !== "production") {
-      app.listen(ENV.PORT, () => {
-        console.log("Server started on port:", ENV.PORT);
-      });
-    }
+    const PORT = ENV.PORT || 3000;
+    const HOST = ENV.NODE_ENV === "production" ? '0.0.0.0' : 'localhost';
+    
+    app.listen(PORT, HOST, () => {
+      console.log(`Server started on ${HOST}:${PORT}`);
+      console.log("Environment:", ENV.NODE_ENV);
+    });
   } catch (error) {
     console.error("Error starting server:", error);
-    process.exit(1); // Exit the process with a failure code
+    process.exit(1);
   }
 };
+
 
 startServer();
 
