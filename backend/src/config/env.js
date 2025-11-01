@@ -1,10 +1,5 @@
 import "dotenv/config";
 
-// Print EVERYTHING before exporting
-console.log("=== FULL DEBUG ===");
-console.log("MONGO_URI:", process.env.MONGO_URI);
-console.log("==================");
-
 export const ENV = {
   PORT: process.env.PORT || 5001,
   MONGO_URI: process.env.MONGO_URI,
