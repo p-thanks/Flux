@@ -193,7 +193,7 @@ Create a `.env` file in the `backend` directory:
 
 ```env
 # Server Configuration
-PORT=5001
+PORT=5000
 NODE_ENV=development
 CLIENT_URL=http://localhost:5173
 
@@ -241,7 +241,7 @@ VITE_API_BASE_URL=http://localhost:5001/api
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/flux.git
+git clone https://github.com/p-thanks/flux.git
 cd flux
 ```
 
@@ -263,7 +263,7 @@ cp .env.example .env
 npm run dev
 ```
 
-Backend will run on: `http://localhost:5001`
+Backend will run on: `http://localhost:5000`
 
 ### 3. Setup Frontend
 
@@ -291,7 +291,7 @@ Frontend will run on: `http://localhost:5173`
 
 Open your browser and navigate to:
 - 🌐 Frontend: `http://localhost:5173`
-- 🔌 Backend API: `http://localhost:5001`
+- 🔌 Backend API: `http://localhost:5000`
 
 ---
 
