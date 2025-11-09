@@ -231,7 +231,7 @@ VITE_STREAM_API_KEY=xxxxxxxxxxxxxxxxxxxxx
 VITE_SENTRY_DSN=https://xxxxxxxxxxxxxxxxxxxxx@sentry.io/xxxxxxxxxxxxxxxxxxxxx
 
 # Backend API URL
-VITE_API_BASE_URL=http://localhost:5001/api
+VITE_API_BASE_URL=http://localhost:5000/api
 ```
 
 ---
@@ -333,11 +333,17 @@ GET    /api/polls/:id/results - Get poll results
 
 ---
 
-## 🔐 Authentication Flow
+## 🔐 Complete Application Flows
+
+Flux is built with a comprehensive flow architecture covering authentication, messaging, calling, and more.
+
+---
+
+## 🔑 Authentication Flow
 
 Flux uses **Clerk** for secure, production-ready authentication with a seamless user experience.
 
-### Registration & Login Flow
+### User Registration & Login Flow
 
 ```mermaid
 graph TD
@@ -352,6 +358,38 @@ graph TD
     D -->|Failure| I[Show Error Message]
     I --> B
     I --> C
+```
+
+### Complete Authentication Architecture
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant F as Frontend
+    participant C as Clerk
+    participant B as Backend
+    participant DB as MongoDB
+    participant S as Stream
+
+    U->>F: Click "Sign Up"
+    F->>C: Redirect to Clerk Sign Up
+    U->>C: Enter credentials/OAuth
+    C->>C: Validate & Create Account
+    C->>F: Return JWT Token
+    F->>F: Store Token (Secure)
+    C->>B: Send Webhook (user.created)
+    B->>B: Verify Webhook Signature
+    B->>DB: Create User Document
+    B->>S: Generate Stream Token
+    DB-->>B: User Created
+    B-->>C: Webhook Success
+    F->>B: GET /api/auth/me (with token)
+    B->>C: Verify JWT Token
+    C-->>B: Token Valid + User Data
+    B->>DB: Fetch User Details
+    DB-->>B: User Data
+    B-->>F: User Profile + Stream Token
+    F->>F: Redirect to Dashboard
 ```
 
 ### Authentication Process
@@ -545,6 +583,440 @@ import { SignedIn, SignedOut, RedirectToSignIn } from '@clerk/clerk-react';
 
 ---
 
+## 💬 Messaging Flow
+
+### Real-time Message Delivery
+
+```mermaid
+sequenceDiagram
+    participant U1 as User 1 (Sender)
+    participant F1 as Frontend 1
+    participant B as Backend API
+    participant S as Stream Chat
+    participant DB as MongoDB
+    participant F2 as Frontend 2
+    participant U2 as User 2 (Receiver)
+
+    U1->>F1: Type message & press Send
+    F1->>F1: Validate message (not empty)
+    F1->>B: POST /api/messages/send
+    B->>B: Authenticate user
+    B->>DB: Save message metadata
+    DB-->>B: Message saved
+    B->>S: Send message via Stream SDK
+    S->>S: Broadcast to channel subscribers
+    S-->>F1: Message delivered (confirmation)
+    S-->>F2: Real-time message event
+    F2->>F2: Update UI with new message
+    F2->>U2: Display notification
+    F1->>F1: Show "Sent" status
+    U2->>F2: Message appears instantly
+```
+
+### Message Features Flow
+
+```mermaid
+graph LR
+    A[User Types Message] --> B{Message Type?}
+    B -->|Text| C[Send Text Message]
+    B -->|File| D[Upload File to Cloud]
+    B -->|Reply| E[Create Thread]
+    
+    C --> F[Stream Broadcasts]
+    D --> G[Get File URL]
+    G --> F
+    E --> F
+    
+    F --> H[Receiver Gets Message]
+    H --> I{User Actions}
+    I -->|React| J[Add Emoji Reaction]
+    I -->|Reply| K[Start Thread]
+    I -->|Pin| L[Pin Message]
+    I -->|Edit| M[Edit Own Message]
+    I -->|Delete| N[Delete Message]
+    
+    J --> O[Update Message State]
+    K --> O
+    L --> O
+    M --> O
+    N --> O
+```
+
+### File Upload Flow
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant F as Frontend
+    participant B as Backend
+    participant C as Cloudinary/S3
+    participant S as Stream
+    participant DB as MongoDB
+
+    U->>F: Select file to upload
+    F->>F: Validate file (type, size)
+    F->>B: POST /api/upload (multipart/form-data)
+    B->>B: Authenticate & validate
+    B->>C: Upload file to cloud storage
+    C-->>B: Return file URL & metadata
+    B->>DB: Save file metadata
+    DB-->>B: File record created
+    B-->>F: Return file URL
+    F->>S: Send message with file attachment
+    S->>S: Broadcast message
+    S-->>F: Message delivered
+    F->>F: Display file in chat
+```
+
+---
+
+## 📹 Video Calling Flow
+
+### Call Initiation & Connection
+
+```mermaid
+sequenceDiagram
+    participant U1 as Caller
+    participant F1 as Frontend 1
+    participant B as Backend
+    participant S as Stream Video
+    participant F2 as Frontend 2
+    participant U2 as Receiver
+
+    U1->>F1: Click "Start Video Call"
+    F1->>B: POST /api/calls/create
+    B->>B: Authenticate user
+    B->>S: Create call room
+    S-->>B: Return call ID & token
+    B->>DB: Save call metadata
+    DB-->>B: Call record created
+    B-->>F1: Call ID + token
+    F1->>S: Join call with token
+    S-->>F1: Connected to call room
+    F1->>B: POST /api/calls/notify
+    B->>F2: Send push notification
+    F2->>U2: Show incoming call UI
+    U2->>F2: Accept call
+    F2->>B: GET /api/calls/:id/token
+    B-->>F2: Generate participant token
+    F2->>S: Join call with token
+    S->>S: Establish P2P connection
+    S-->>F1: Participant joined
+    S-->>F2: Connected to caller
+    F1->>F1: Show video streams
+    F2->>F2: Show video streams
+    U1->>U1: Call in progress 🎥
+    U2->>U2: Call in progress 🎥
+```
+
+### Screen Sharing Flow
+
+```mermaid
+graph TD
+    A[User clicks Share Screen] --> B[Request screen capture permission]
+    B --> C{Permission granted?}
+    C -->|Yes| D[Capture screen stream]
+    C -->|No| E[Show error message]
+    D --> F[Send stream to Stream Video SDK]
+    F --> G[Broadcast to all participants]
+    G --> H[Other users see shared screen]
+    H --> I{User actions}
+    I -->|Stop sharing| J[Stop screen capture]
+    I -->|Switch window| K[Update shared content]
+    J --> L[Notify participants]
+    K --> G
+```
+
+### Call Recording Flow
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant F as Frontend
+    participant S as Stream Video
+    participant B as Backend
+    participant ST as Cloud Storage
+    participant DB as MongoDB
+
+    U->>F: Click "Start Recording"
+    F->>S: Start recording session
+    S->>S: Begin capturing audio/video
+    S-->>F: Recording started
+    F->>B: POST /api/calls/:id/recording/start
+    B->>DB: Update call status (recording: true)
+    Note over S: Recording in progress...
+    U->>F: Click "Stop Recording"
+    F->>S: Stop recording
+    S->>S: Process & encode recording
+    S->>ST: Upload recording file
+    ST-->>S: Return file URL
+    S-->>F: Recording completed + URL
+    F->>B: POST /api/calls/:id/recording/complete
+    B->>DB: Save recording URL & metadata
+    DB-->>B: Recording saved
+    B-->>F: Recording available
+    F->>F: Show "View Recording" button
+```
+
+---
+
+## 📊 Poll Creation & Voting Flow
+
+```mermaid
+sequenceDiagram
+    participant U1 as Poll Creator
+    participant F1 as Frontend
+    participant B as Backend
+    participant DB as MongoDB
+    participant S as Stream
+    participant F2 as Other Users
+    participant U2 as Voters
+
+    U1->>F1: Click "Create Poll"
+    F1->>F1: Show poll creation form
+    U1->>F1: Enter question & options
+    U1->>F1: Set settings (anonymous, multiple choice)
+    F1->>B: POST /api/polls/create
+    B->>B: Validate poll data
+    B->>DB: Save poll document
+    DB-->>B: Poll created with ID
+    B-->>F1: Return poll data
+    F1->>S: Broadcast poll message
+    S-->>F2: New poll notification
+    F2->>F2: Display poll card
+    U2->>F2: Click vote option
+    F2->>B: POST /api/polls/:id/vote
+    B->>B: Validate vote (user hasn't voted)
+    B->>DB: Record vote
+    DB-->>B: Vote recorded
+    B->>DB: Update poll results
+    DB-->>B: Updated results
+    B-->>F2: Return updated results
+    F2->>S: Broadcast result update
+    S-->>F1: Updated poll results
+    S-->>F2: Updated poll results
+    F1->>F1: Update results in real-time
+    F2->>F2: Update results in real-time
+```
+
+---
+
+## 📂 Channel & Direct Message Flow
+
+### Channel Creation
+
+```mermaid
+graph TD
+    A[User clicks Create Channel] --> B[Fill channel details]
+    B --> C{Channel Type?}
+    C -->|Public| D[Create public channel]
+    C -->|Private| E[Select members]
+    
+    D --> F[POST /api/channels/create]
+    E --> G[Add selected members]
+    G --> F
+    
+    F --> H[Backend validates]
+    H --> I[Create in MongoDB]
+    I --> J[Create Stream channel]
+    J --> K[Add creator as admin]
+    K --> L{Private channel?}
+    L -->|Yes| M[Add invited members]
+    L -->|No| N[Channel is discoverable]
+    M --> O[Send invitations]
+    N --> P[Channel created]
+    O --> P
+    P --> Q[Redirect to channel]
+```
+
+### Direct Message Initiation
+
+```mermaid
+sequenceDiagram
+    participant U1 as User 1
+    participant F1 as Frontend 1
+    participant B as Backend
+    participant S as Stream
+    participant DB as MongoDB
+    participant F2 as Frontend 2
+    participant U2 as User 2
+
+    U1->>F1: Click user profile
+    U1->>F1: Click "Send Message"
+    F1->>B: POST /api/dm/create
+    B->>B: Check existing DM channel
+    alt DM exists
+        B->>DB: Fetch existing DM channel
+        DB-->>B: Return channel ID
+    else New DM
+        B->>S: Create DM channel
+        S-->>B: Channel created
+        B->>DB: Save DM metadata
+        DB-->>B: DM record saved
+    end
+    B-->>F1: Return channel ID
+    F1->>F1: Navigate to DM
+    F1->>S: Connect to DM channel
+    U1->>F1: Type & send message
+    F1->>S: Send message
+    S-->>F2: Deliver message
+    F2->>U2: Show notification
+    F2->>F2: Display message
+```
+
+---
+
+## 🔔 Notification Flow
+
+```mermaid
+graph TD
+    A[Event occurs] --> B{Event Type?}
+    
+    B -->|New Message| C[Message Notification]
+    B -->|Incoming Call| D[Call Notification]
+    B -->|Mention| E[Mention Notification]
+    B -->|Reaction| F[Reaction Notification]
+    
+    C --> G[Check user preferences]
+    D --> G
+    E --> G
+    F --> G
+    
+    G --> H{User online?}
+    H -->|Yes| I[In-app notification]
+    H -->|No| J[Push notification]
+    
+    I --> K[Show toast/banner]
+    J --> L[Send to FCM/APNS]
+    L --> M[Device receives push]
+    
+    K --> N[User clicks notification]
+    M --> N
+    
+    N --> O[Navigate to content]
+```
+
+---
+
+## 🎯 Complete User Journey
+
+### First-Time User Experience
+
+```mermaid
+graph TD
+    A[Visit Flux] --> B[Landing Page]
+    B --> C{Action?}
+    
+    C -->|Sign Up| D[Registration Flow]
+    C -->|Explore| E[View Features]
+    
+    D --> F[Email/Social Auth]
+    F --> G[Account Created]
+    G --> H[Onboarding Tutorial]
+    H --> I[Profile Setup]
+    I --> J[Join Channels/Invite Friends]
+    
+    E --> B
+    
+    J --> K[Dashboard]
+    K --> L{User Action?}
+    
+    L -->|Browse Channels| M[Channel List]
+    L -->|Start Chat| N[Create/Join DM]
+    L -->|Make Call| O[Initiate Call]
+    L -->|Create Poll| P[Poll Creation]
+    
+    M --> Q[Send Message]
+    N --> Q
+    O --> R[Video Call Interface]
+    P --> S[Publish Poll]
+    
+    Q --> T[Continue Chatting]
+    R --> U[End Call]
+    S --> T
+    U --> K
+    T --> K
+```
+
+---
+
+## 🔄 Background Job Flows (Inngest)
+
+### Scheduled Tasks
+
+```mermaid
+graph LR
+    A[Cron Trigger] --> B{Job Type?}
+    
+    B -->|Daily| C[Cleanup Old Messages]
+    B -->|Hourly| D[Sync User Status]
+    B -->|Weekly| E[Generate Analytics]
+    
+    C --> F[Inngest Job]
+    D --> F
+    E --> F
+    
+    F --> G[Execute Task]
+    G --> H[Update Database]
+    H --> I[Log Results]
+    I --> J[Send Report]
+```
+
+### Event-Driven Jobs
+
+```mermaid
+sequenceDiagram
+    participant E as Event Source
+    participant I as Inngest
+    participant J as Job Worker
+    participant DB as Database
+    participant N as Notification Service
+
+    E->>I: Trigger event (user.registered)
+    I->>I: Queue job
+    I->>J: Execute job function
+    J->>DB: Update user record
+    J->>N: Send welcome email
+    N-->>J: Email sent
+    J->>I: Job completed
+    I->>I: Log success
+```
+
+---
+
+## 🚨 Error Handling Flow (Sentry)
+
+```mermaid
+graph TD
+    A[Error Occurs] --> B{Error Type?}
+    
+    B -->|Frontend| C[React Error Boundary]
+    B -->|Backend| D[Express Error Handler]
+    B -->|Network| E[Axios Interceptor]
+    
+    C --> F[Capture Error]
+    D --> F
+    E --> F
+    
+    F --> G[Send to Sentry]
+    G --> H[Sentry Processes]
+    H --> I[Alert Dev Team]
+    H --> J[Create Issue]
+    H --> K[Track User Impact]
+    
+    I --> L[Developer Reviews]
+    J --> L
+    
+    L --> M[Fix Deployed]
+    M --> N[Mark Resolved]
+    
+    C --> O[Show Error UI]
+    D --> P[Return Error Response]
+    E --> O
+```
+
+---
+
 ## 🎨 Key Features Deep Dive
 
 ### Real-time Messaging
@@ -680,7 +1152,7 @@ This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) 
 
 <div align="center">
 
-### Made with ✨ by **Your Name**
+### Made with ✨ by **Pthanks**
 
 [![LinkedIn](https://img.shields.io/badge/LinkedIn-0077B5?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/paul-thanksgiving-800867309/)
 [![GitHub](https://img.shields.io/badge/GitHub-100000?style=for-the-badge&logo=github&logoColor=white)](https://github.com/p-thanks)
